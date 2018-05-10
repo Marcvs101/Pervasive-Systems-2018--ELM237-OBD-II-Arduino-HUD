@@ -27,6 +27,10 @@
 #include "OBD_defines.h"
 #include "ELM327_defines.h"
 
+//Custom defines
+#define RPM_MAX 5000
+#define RPM_MIN 1500
+
 //Import LCD
 #include <liquidcrystal_I2C.h>
 #include <Wire.h>
@@ -73,7 +77,9 @@ void setup() {
 }
 
 //AUX Functions
-int ELMQuery(String query,int timeout) {
+
+//Standard query, get packet string
+String ELMQuery(String query,int timeout) {
   String tmpRXString="";
   byte tmpByte = 0;
 
@@ -109,34 +115,63 @@ int ELMQuery(String query,int timeout) {
   return tmpRXString;
 }
 
-long ELMMEssagePayload(int expectedCommandLength) {
-  if (expectedCommandLength < 0){
-    String command = tmpRXString.substring(2,4);
-    if (strcmp(command,OBD_RPM)) {expectedCommandLength = 2*2;}
-    if (expectedCommandLength==0 && (strcmp(command,OBD_PIDS_A)||strcmp(command,OBD_PIDS_B)||strcmp(command,OBD_PIDS_C)||strcmp(command,OBD_PIDS_D))) {expectedCommandLength = 4*2;}
+//Extract payload as a long int
+long ELMMEssagePayload(String message, String query) {
+  String tmpString = "";
+  int cmdlen = 2;
+  switch(query){
+    case OBD_RPM:
+      cmdlen = 4;
+    break;
+    case OBD_PIDS_A:
+    case OBD_PIDS_B:
+    case OBD_PIDS_C:
+    case OBD_PIDS_D:
+      cmdlen = 8;
+    break;
   }
-  int dataEND = 6 + expectedCommandLength;
-  tmpWorkString = tmpRXString.substring(4,dataEND);
-  return strtol(tmpWorkString,NULL,16);
+  int dataEND = 6 + cmdlen;
+  tmpString = message.substring(4,dataEND);
+  return HandleELMMessage(strtol(tmpString,NULL,16),query);
 }
 
-String HandleELMMEssage(String message, String query){
-  long payload = ELMMessagePayload(message,strlen(query));
+//Value formatting according to OBD formulas
+long HandleELMMessage(long payload, String query){
+  long res = 0;
+  switch(query){
+    case OBD_SPEED:
+      res = payload
+    break;
+    case OBD_RPM:
+      res = payload/4;
+    break;
+    case OBD_FUEL_LEVEL:
+    case OBD_LOAD:
+      res = payload*100/255;
+    break;
+    case OBD_COOLANT:
+    case OBD_OIL_TEMP:
+      res = payload-40;
+    break;
+  }
+  return res;
+}
+
+//String formatting for the lazy
+String StringifyELMMEssage(long payload, String query){
   String res = "";
   switch(query){
     case OBD_SPEED:
       res = String(payload)+ " km/h";
     break;
-    case OBD_RPM:
-      res = String(payload/4)+ " rpm";
-    break;
     case OBD_FUEL_LEVEL:
     case OBD_LOAD:
-      res = String(payload*100/255)+ " %";
+      res = String(payload)+ "%";
     break;
+    case RPM:
     case OBD_COOLANT:
     case OBD_OIL_TEMP:
-      res = String(payload-40)+ " C";
+      res = String(payload);
     break;
   }
   return res;
@@ -147,74 +182,158 @@ void loop() {
   unsigned long start = millis();
   unsigned long finish = start;
   unsigned long waitTime = 0;
-  String result = "";
+  String resultSTR = "";
+  long resultNMBR = 0;
   //Query a subset of elements for each cycle
   //Got to go fast
   switch(state){
+    
+    //Print speed and advise if gear shift is necessary
     case 1:
-      result = HandleELMMEssage(ELMQuery(OBD_SPEED,1000),OBD_SPEED);
-      lcd.setCursor(0,0);
-      lcd.print(result+"  ");
-      result = HandleELMMEssage(ELMQuery(OBD_RPM,1000),OBD_RPM);
+      resultNMBR = ELMMessagePayload(ELMQuery(OBD_SPEED,1000),OBD_SPEED);
+      if (resultNMBR < 10){
+        lcd.noDisplay(); //For I2C use lcd.noBacklight
+        break;
+      } else {
+        lcd.display();   //For I2C use lcd.backlight
+      }
+      resultSTR = StringifyELMMEssage(resultNMBR,2);
+      lcd.setCursor(4,0);
+      lcd.print(resultSTR+"  ");
+      //
+      resultNMBR = ELMMessagePayload(ELMQuery(OBD_RPM,1000),OBD_RPM);
       lcd.setCursor(0,1);
-      lcd.print("                ");
-      lcd.setCursor(0,1);
-      lcd.print("RPM: "+result+);
+      lcd.print("   ");
+      if (resultNMBR > RPM_MAX){
+        lcd.setCursor(0,1);
+        lcd.print("/UP\\");
+      } else if (resultNMBR < RPM_MIN){
+        lcd.setCursor(0,1);
+        lcd.print("\\DN/");
+      } else {
+        resultSTR = StringifyELMMEssage(resultNMBR,OBD_RPM);
+        lcd.setCursor(0,1);
+        lcd.print(resultSTR.substring(1,3));
+      }
       state = 2;
     break;
+
+    //Print speed and display fuel tank value on lower right
     case 2:
-      result = HandleELMMEssage(ELMQuery(OBD_SPEED,1000),OBD_SPEED);
-      lcd.setCursor(0,0);
-      lcd.print(result+"  ");
-      result = HandleELMMEssage(ELMQuery(OBD_FUEL_LEVEL,1000),OBD_FUEL_LEVEL);
-      lcd.setCursor(0,1);
-      lcd.print("                ");
-      lcd.setCursor(0,1);
-      lcd.print("Fuel: "+result);
+      resultNMBR = ELMMessagePayload(ELMQuery(OBD_SPEED,1000),OBD_SPEED);
+      if (resultNMBR < 10){
+        lcd.noDisplay();
+        break;
+      } else {
+        lcd.display();
+      }
+      resultSTR = StringifyELMMEssage(resultNMBR,OBD_SPEED);
+      lcd.setCursor(4,0);
+      lcd.print(resultSTR+"  ");
+      //
+      resultNMBR = ELMMessagePayload(ELMQuery(OBD_FUEL_LEVEL,1000),OBD_FUEL_LEVEL);
+      resultSTR = StringifyELMMEssage(resultNMBR,OBD_FUEL_LEVEL);
+      lcd.setCursor(7,0);
+      lcd.print("        ");
+      lcd.setCursor(7,1);
+      lcd.print("FL "+resultSTR);
       state = 3;
     break;
+
+    //Print speed and display oil temperarue on lower left
     case 3:
-      result = HandleELMMEssage(ELMQuery(OBD_SPEED,1000),OBD_SPEED);
-      lcd.setCursor(0,0);
+      resultNMBR = ELMMessagePayload(ELMQuery(OBD_SPEED,1000),OBD_SPEED);
+      if (resultNMBR < 10){
+        lcd.noDisplay();
+        break;
+      } else {
+        lcd.display();
+      }
+      resultSTR = StringifyELMMEssage(resultNMBR,OBD_SPEED);
+      lcd.setCursor(4,0);
       lcd.print(result+"  ");
-      result = HandleELMMEssage(ELMQuery(OBD_LOAD,1000),OBD_LOAD);
+      //
+      resultNMBR = ELMMessagePayload(ELMQuery(OBD_OIL_TEMP,1000),OBD_OIL_TEMP);
+      resultSTR = StringifyELMMEssage(resultNMBR,OBD_OIL_TEMP);
       lcd.setCursor(0,1);
-      lcd.print("                ");
+      lcd.print("        ");
       lcd.setCursor(0,1);
-      lcd.print("ENG Load: "+result);
+      lcd.print("OIL "+resultSTR);
       state = 4;
     break;
+
+    //Print speed and advise if gear shift is necessary
     case 4:
-      result = HandleELMMEssage(ELMQuery(OBD_SPEED,1000),OBD_SPEED);
-      lcd.setCursor(0,0);
+      resultNMBR = ELMMessagePayload(ELMQuery(OBD_SPEED,1000),OBD_SPEED);
+      if (resultNMBR < 10){
+        lcd.noDisplay();
+        break;
+      } else {
+        lcd.display();
+      }
+      resultSTR = StringifyELMMEssage(resultNMBR,OBD_SPEED);
+      lcd.setCursor(4,0);
       lcd.print(result+"  ");
-      result = HandleELMMEssage(ELMQuery(OBD_RPM,1000),OBD_RPM);
+      //
+      resultNMBR = ELMMessagePayload(ELMQuery(OBD_RPM,1000),OBD_RPM);
       lcd.setCursor(0,1);
-      lcd.print("                ");
-      lcd.setCursor(0,1);
-      lcd.print("RPM: "+result);
+      lcd.print("   ");
+      if (resultNMBR > RPM_MAX){
+        lcd.setCursor(0,1);
+        lcd.print("/UP\\");
+      } else if (resultNMBR < RPM_MIN){
+        lcd.setCursor(0,1);
+        lcd.print("\\DN/");
+      } else {
+        resultSTR = StringifyELMMEssage(resultNMBR,OBD_RPM);
+        lcd.setCursor(0,1);
+        lcd.print(resultSTR.substring(1,3));
+      }
       state = 5;
     break;
+
+    //Print speed and display high load warning
     case 5:
-      result = HandleELMMEssage(ELMQuery(OBD_SPEED,1000),OBD_SPEED);
-      lcd.setCursor(0,0);
+      resultNMBR = ELMMessagePayload(ELMQuery(OBD_SPEED,1000),OBD_SPEED);
+      if (resultNMBR < 10){
+        lcd.noDisplay();
+        break;
+      } else {
+        lcd.display();
+      }
+      resultSTR = StringifyELMMEssage(resultNMBR,OBD_SPEED);
+      lcd.setCursor(4,0);
       lcd.print(result+"  ");
-      result = HandleELMMEssage(ELMQuery(OBD_OIL_TEMP,1000),OBD_OIL_TEMP);
-      lcd.setCursor(0,1);
-      lcd.print("                ");
-      lcd.setCursor(0,1);
-      lcd.print("Oil: "+result);
+      //
+      resultNMBR = ELMMessagePayload(ELMQuery(OBD_LOAD,1000),OBD_LOAD);
+      if (resultNMBR > 80){
+        lcd.setCursor(0,1);
+        lcd.print("                ");
+        lcd.setCursor(0,1);
+        lcd.print("\\HIGH ENG LOAD!/");
+      }
       state = 6;
     break;
+
+    //Print speed and display coolant temperature on lower left
     case 6:
-      result = HandleELMMEssage(ELMQuery(OBD_SPEED,1000),OBD_SPEED);
-      lcd.setCursor(0,0);
+      resultNMBR = ELMMessagePayload(ELMQuery(OBD_SPEED,1000),OBD_SPEED);
+      if (resultNMBR < 10){
+        lcd.noDisplay();
+        break;
+      } else {
+        lcd.display();
+      }
+      resultSTR = StringifyELMMEssage(resultNMBR,OBD_SPEED);
+      lcd.setCursor(4,0);
       lcd.print(result+"  ");
-      result = HandleELMMEssage(ELMQuery(OBD_COOLANT,1000),OBD_COOLANT);
+      //
+      resultNMBR = ELMMessagePayload(ELMQuery(OBD_COOLANT,1000),OBD_COOLANT);
+      resultSTR = StringifyELMMEssage(resultNMBR,OBD_COOLANT);
       lcd.setCursor(0,1);
-      lcd.print("                ");
+      lcd.print("        ");
       lcd.setCursor(0,1);
-      lcd.print("Coolant: "+result);
+      lcd.print("TMP "+resultSTR);
       state = 1;
     break;
   }
