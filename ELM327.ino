@@ -28,7 +28,7 @@
 #include "ELM327_defines.h"
 
 //Custom defines
-#define RPM_MAX 5000
+#define RPM_MAX 3500
 #define RPM_MIN 1500
 
 //Import LCD
