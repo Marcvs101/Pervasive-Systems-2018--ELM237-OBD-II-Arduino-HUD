@@ -10,10 +10,10 @@
 #define OBD_PIDS_C	"40"		//RETURNS 4B Bitmask
 
 //A BLOCK
-#define OBD_LOAD		  "04"	//RETURNS 1B percent (100/255)
+#define OBD_LOAD		"04"	//RETURNS 1B percent (100/255)
 #define OBD_COOLANT		"05"	//RETURNS 1B celsius +40
-#define OBD_RPM			  "0C"	//RETURNS 2B 4*rpm ((256A+B)/4)
-#define OBD_SPEED		  "0D"	//RETURNS 1B km/h
+#define OBD_RPM			"0C"	//RETURNS 2B 4*rpm ((256A+B)/4)
+#define OBD_SPEED		"0D"	//RETURNS 1B km/h
 #define OBD_THROTTLE	"11"	//RETURNS 1B percent (100/255)
 
 //B BLOCK

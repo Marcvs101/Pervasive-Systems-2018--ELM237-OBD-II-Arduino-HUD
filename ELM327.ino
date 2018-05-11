@@ -87,7 +87,7 @@ String ELMQuery(String query,int timeout) {
   unsigned long startTime = millis();
   
   //TX
-  Serial.println(query);
+  Serial.println("01"+query);
 
   //RX
   while(waiting){
@@ -102,7 +102,7 @@ String ELMQuery(String query,int timeout) {
     tmpRXString = tmpRXString + char(tmpByte);
   }
   
-  tmpRXString.replace(command,"");
+  tmpRXString.replace("01"+query,"");
   tmpRXString.replace(" ","");
   tmpRXString.replace("OK","");
   
