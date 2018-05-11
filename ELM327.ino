@@ -28,7 +28,7 @@
 #include "ELM327_defines.h"
 
 //Custom defines
-#define RPM_MAX 5000
+#define RPM_MAX 3500
 #define RPM_MIN 1500
 
 //Import LCD
@@ -82,6 +82,7 @@ void setup() {
 String ELMQuery(String query,int timeout) {
   String tmpRXString="";
   byte tmpByte = 0;
+  bool waiting = true;
 
   unsigned long startTime = millis();
   
@@ -105,7 +106,7 @@ String ELMQuery(String query,int timeout) {
   tmpRXString.replace(" ","");
   tmpRXString.replace("OK","");
   
-  //Some of these look like errors that ought to be handled..
+  //Errors on the bus mapped to empty string
   tmpRXString.replace("STOPPED","");
   tmpRXString.replace("SEARCHING","");
   tmpRXString.replace("NO DATA","");
@@ -198,18 +199,18 @@ void loop() {
         lcd.display();   //For I2C use lcd.backlight
       }
       resultSTR = StringifyELMMEssage(resultNMBR,2);
-      lcd.setCursor(4,0);
+      lcd.setCursor(6,0);
       lcd.print(resultSTR+"  ");
       //
       resultNMBR = ELMMessagePayload(ELMQuery(OBD_RPM,1000),OBD_RPM);
-      lcd.setCursor(0,1);
-      lcd.print("   ");
+      lcd.setCursor(0,0);
+      lcd.print("    ");
       if (resultNMBR > RPM_MAX){
-        lcd.setCursor(0,1);
-        lcd.print("/UP\\");
+        lcd.setCursor(0,0);
+        lcd.print("*UP*");
       } else if (resultNMBR < RPM_MIN){
-        lcd.setCursor(0,1);
-        lcd.print("\\DN/");
+        lcd.setCursor(0,0);
+        lcd.print("*DN*");
       } else {
         resultSTR = StringifyELMMEssage(resultNMBR,OBD_RPM);
         lcd.setCursor(0,1);
@@ -228,14 +229,14 @@ void loop() {
         lcd.display();
       }
       resultSTR = StringifyELMMEssage(resultNMBR,OBD_SPEED);
-      lcd.setCursor(4,0);
+      lcd.setCursor(6,0);
       lcd.print(resultSTR+"  ");
       //
       resultNMBR = ELMMessagePayload(ELMQuery(OBD_FUEL_LEVEL,1000),OBD_FUEL_LEVEL);
       resultSTR = StringifyELMMEssage(resultNMBR,OBD_FUEL_LEVEL);
       lcd.setCursor(7,0);
       lcd.print("        ");
-      lcd.setCursor(7,1);
+      lcd.setCursor(9,1);
       lcd.print("FL "+resultSTR);
       state = 3;
     break;
@@ -250,8 +251,8 @@ void loop() {
         lcd.display();
       }
       resultSTR = StringifyELMMEssage(resultNMBR,OBD_SPEED);
-      lcd.setCursor(4,0);
-      lcd.print(result+"  ");
+      lcd.setCursor(6,0);
+      lcd.print(resultSTR+"  ");
       //
       resultNMBR = ELMMessagePayload(ELMQuery(OBD_OIL_TEMP,1000),OBD_OIL_TEMP);
       resultSTR = StringifyELMMEssage(resultNMBR,OBD_OIL_TEMP);
@@ -272,18 +273,18 @@ void loop() {
         lcd.display();
       }
       resultSTR = StringifyELMMEssage(resultNMBR,OBD_SPEED);
-      lcd.setCursor(4,0);
-      lcd.print(result+"  ");
+      lcd.setCursor(6,0);
+      lcd.print(resultSTR+"  ");
       //
       resultNMBR = ELMMessagePayload(ELMQuery(OBD_RPM,1000),OBD_RPM);
-      lcd.setCursor(0,1);
-      lcd.print("   ");
+      lcd.setCursor(0,0);
+      lcd.print("    ");
       if (resultNMBR > RPM_MAX){
-        lcd.setCursor(0,1);
-        lcd.print("/UP\\");
+        lcd.setCursor(0,0);
+        lcd.print("*UP*");
       } else if (resultNMBR < RPM_MIN){
-        lcd.setCursor(0,1);
-        lcd.print("\\DN/");
+        lcd.setCursor(0,0);
+        lcd.print("*DN*");
       } else {
         resultSTR = StringifyELMMEssage(resultNMBR,OBD_RPM);
         lcd.setCursor(0,1);
@@ -302,15 +303,15 @@ void loop() {
         lcd.display();
       }
       resultSTR = StringifyELMMEssage(resultNMBR,OBD_SPEED);
-      lcd.setCursor(4,0);
-      lcd.print(result+"  ");
+      lcd.setCursor(6,0);
+      lcd.print(resultSTR+"  ");
       //
       resultNMBR = ELMMessagePayload(ELMQuery(OBD_LOAD,1000),OBD_LOAD);
       if (resultNMBR > 80){
         lcd.setCursor(0,1);
         lcd.print("                ");
         lcd.setCursor(0,1);
-        lcd.print("\\HIGH ENG LOAD!/");
+        lcd.print("*HIGH ENG LOAD!*");
       }
       state = 6;
     break;
@@ -325,8 +326,8 @@ void loop() {
         lcd.display();
       }
       resultSTR = StringifyELMMEssage(resultNMBR,OBD_SPEED);
-      lcd.setCursor(4,0);
-      lcd.print(result+"  ");
+      lcd.setCursor(6,0);
+      lcd.print(resultSTR+"  ");
       //
       resultNMBR = ELMMessagePayload(ELMQuery(OBD_COOLANT,1000),OBD_COOLANT);
       resultSTR = StringifyELMMEssage(resultNMBR,OBD_COOLANT);
